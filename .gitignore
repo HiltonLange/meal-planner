@@ -1,0 +1,15 @@
+# .NET
+api/bin/
+api/obj/
+api/*.db
+api/*.db-shm
+api/*.db-wal
+
+# Node
+web/node_modules/
+web/dist/
+
+# Editor
+.vs/
+.vscode/
+*.user
