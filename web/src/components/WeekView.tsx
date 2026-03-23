@@ -67,7 +67,7 @@ export function WeekView({ onShowShopping }: Props) {
           {!isCurrentWeek && (
             <button
               onClick={goToday}
-              className="ml-1 px-3 py-1 rounded-lg text-xs text-indigo-400 border border-indigo-700 hover:bg-indigo-900/40"
+              className="ml-1 px-3 py-1 rounded-lg text-xs text-emerald-400 border border-emerald-700 hover:bg-emerald-900/40"
             >
               This week
             </button>
@@ -81,7 +81,7 @@ export function WeekView({ onShowShopping }: Props) {
         <button
           onClick={() => week && onShowShopping(week)}
           disabled={!week}
-          className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-sm font-medium disabled:opacity-30 whitespace-nowrap"
+          className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-sm font-medium disabled:opacity-30 whitespace-nowrap"
         >
           Shopping
         </button>

@@ -129,7 +129,7 @@ function ItemRow({ item, onToggle }: { item: ShoppingItem; onToggle: () => void 
       }`}
     >
       <span className={`w-6 h-6 flex-shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
-        item.purchased ? 'border-indigo-500 bg-indigo-500' : 'border-slate-600'
+        item.purchased ? 'border-emerald-500 bg-emerald-500' : 'border-slate-600'
       }`}>
         {item.purchased && <span className="text-white text-xs font-bold">✓</span>}
       </span>

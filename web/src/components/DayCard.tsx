@@ -29,14 +29,14 @@ export function DayCard({ day, date }: Props) {
       </div>
 
       <input
-        className="bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-500"
+        className="bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-500"
         placeholder="what are we having?"
         value={meal}
         onChange={e => { setMeal(e.target.value); save({ meal: e.target.value }) }}
       />
 
       <input
-        className="bg-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-500"
+        className="bg-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-500"
         placeholder="notes — BYT, kids out 8pm, hot day..."
         value={notes}
         onChange={e => { setNotes(e.target.value); save({ notes: e.target.value }) }}

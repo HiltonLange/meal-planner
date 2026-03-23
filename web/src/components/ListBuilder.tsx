@@ -26,7 +26,7 @@ function IngredientField({ day }: { day: DayDto }) {
         <span className="text-xs text-slate-500">{day.meal}</span>
       </div>
       <textarea
-        className="bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-500 min-h-[64px]"
+        className="bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-500 min-h-[64px]"
         placeholder="tomato paste, garlic, bread..."
         value={value}
         onChange={e => { setValue(e.target.value); save(e.target.value) }}
@@ -103,7 +103,7 @@ export function ListBuilder({ week, onStartShopping, onBack }: Props) {
           ))}
           <div className="flex gap-2">
             <input
-              className="flex-1 bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-500"
+              className="flex-1 bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-500"
               placeholder="bread, bagels, vanilla syrup..."
               value={newStaple}
               onChange={e => setNewStaple(e.target.value)}
@@ -122,7 +122,7 @@ export function ListBuilder({ week, onStartShopping, onBack }: Props) {
         <button
           onClick={handleStartShopping}
           disabled={generating || mealsWithIngredients.length === 0}
-          className="w-full py-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-lg disabled:opacity-40"
+          className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold text-lg disabled:opacity-40"
         >
           {generating ? 'Generating…' : 'Start Shopping →'}
         </button>
