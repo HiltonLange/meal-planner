@@ -8,11 +8,17 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlite("Data Source=mealplanner.db"));
 
 builder.Services.AddCors(opt =>
-    opt.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+    opt.AddDefaultPolicy(p => p
+        .WithOrigins(
+            "http://localhost:5173",
+            "https://green-pebble-0bad19b10.1.azurestaticapps.net"
+        )
+        .AllowAnyMethod()
+        .AllowAnyHeader()));
 
 var app = builder.Build();
 
-// Apply migrations and seed weeks on startup
+// Apply migrations on startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -23,15 +29,12 @@ app.UseCors();
 
 // --- Weeks ---
 
-// GET /api/weeks/current  — returns this week (creates it if needed)
 app.MapGet("/api/weeks/current", async (AppDbContext db) =>
 {
-    var sunday = GetCurrentSunday();
-    var week = await GetOrCreateWeek(db, sunday);
+    var week = await GetOrCreateWeek(db, GetCurrentSunday());
     return Results.Ok(ToDto(week));
 });
 
-// GET /api/weeks  — list all weeks (for history), newest first
 app.MapGet("/api/weeks", async (AppDbContext db) =>
 {
     var weeks = await db.Weeks
@@ -41,25 +44,21 @@ app.MapGet("/api/weeks", async (AppDbContext db) =>
     return Results.Ok(weeks.Select(ToDto));
 });
 
-// GET /api/weeks/{id}
 app.MapGet("/api/weeks/{id:int}", async (int id, AppDbContext db) =>
 {
     var week = await db.Weeks.Include(w => w.Days).FirstOrDefaultAsync(w => w.Id == id);
     return week is null ? Results.NotFound() : Results.Ok(ToDto(week));
 });
 
-// GET /api/weeks/by-date/{date}  — e.g. /api/weeks/by-date/2026-03-22, creates if missing
 app.MapGet("/api/weeks/by-date/{date}", async (string date, AppDbContext db) =>
 {
     if (!DateOnly.TryParse(date, out var parsed)) return Results.BadRequest("Invalid date");
-    var sunday = ToSunday(parsed);
-    var week = await GetOrCreateWeek(db, sunday);
+    var week = await GetOrCreateWeek(db, ToSunday(parsed));
     return Results.Ok(ToDto(week));
 });
 
 // --- Days ---
 
-// PATCH /api/days/{id}  — update a single day's fields
 app.MapPatch("/api/days/{id:int}", async (int id, DayPatchRequest req, AppDbContext db) =>
 {
     var day = await db.DayPlans.FindAsync(id);
@@ -73,37 +72,103 @@ app.MapPatch("/api/days/{id:int}", async (int id, DayPatchRequest req, AppDbCont
     return Results.Ok(ToDayDto(day));
 });
 
-// --- Shopping list ---
+// --- Shopping items ---
 
-// GET /api/weeks/{weekId}/shopping
-// Parses ingredient text from all days + active staples into a unified list
-app.MapGet("/api/weeks/{weekId:int}/shopping", async (int weekId, AppDbContext db) =>
+// GET /api/weeks/{weekId}/shopping-items — poll this for real-time sync
+app.MapGet("/api/weeks/{weekId:int}/shopping-items", async (int weekId, AppDbContext db) =>
+{
+    var items = await db.ShoppingItems
+        .Where(s => s.WeekId == weekId)
+        .OrderBy(s => s.SortOrder)
+        .ToListAsync();
+    return Results.Ok(items);
+});
+
+// POST /api/weeks/{weekId}/shopping-items/generate
+// Clears unpurchased items and regenerates from current day ingredients + staples.
+// Already-purchased items are preserved.
+app.MapPost("/api/weeks/{weekId:int}/shopping-items/generate", async (int weekId, AppDbContext db) =>
 {
     var week = await db.Weeks.Include(w => w.Days).FirstOrDefaultAsync(w => w.Id == weekId);
     if (week is null) return Results.NotFound();
 
-    var staples = await db.Staples.ToListAsync();
+    // Remove unpurchased items
+    await db.ShoppingItems
+        .Where(s => s.WeekId == weekId && !s.Purchased)
+        .ExecuteDeleteAsync();
 
-    var dayItems = week.Days
-        .Where(d => !string.IsNullOrWhiteSpace(d.Ingredients))
-        .SelectMany(d =>
+    var newItems = new List<ShoppingItem>();
+    int order = 0;
+
+    // Day ingredients
+    foreach (var day in week.Days.OrderBy(d => d.DayOfWeek))
+    {
+        foreach (var name in ParseIngredients(day.Ingredients))
         {
-            var dayName = DayName(d.DayOfWeek);
-            return ParseIngredients(d.Ingredients)
-                .Select(i => new ShoppingItemDto(0, i, false, "day", dayName));
-        })
-        .ToList();
+            newItems.Add(new ShoppingItem
+            {
+                WeekId = weekId,
+                DayPlanId = day.Id,
+                Name = name,
+                Purchased = false,
+                SortOrder = order++
+            });
+        }
+    }
 
-    var stapleItems = staples
-        .Select(s => new ShoppingItemDto(s.Id, s.Name, s.Purchased, "staple", null))
-        .ToList();
+    // Staples
+    var staples = await db.Staples.OrderBy(s => s.AddedDate).ToListAsync();
+    foreach (var staple in staples)
+    {
+        newItems.Add(new ShoppingItem
+        {
+            WeekId = weekId,
+            DayPlanId = null,
+            Name = staple.Name,
+            Purchased = false,
+            SortOrder = order++
+        });
+    }
 
-    return Results.Ok(new { dayItems, stapleItems });
+    db.ShoppingItems.AddRange(newItems);
+    await db.SaveChangesAsync();
+
+    var all = await db.ShoppingItems
+        .Where(s => s.WeekId == weekId)
+        .OrderBy(s => s.SortOrder)
+        .ToListAsync();
+
+    return Results.Ok(all);
 });
 
-// PATCH /api/days/{dayId}/ingredients/{index}/purchased  — toggle a day ingredient
-// Since day ingredients are free text, we track purchased state client-side via local storage.
-// This endpoint isn't needed — see note in frontend.
+// PATCH /api/shopping-items/{id}/purchased — toggle
+app.MapPatch("/api/shopping-items/{id:int}/purchased", async (int id, AppDbContext db) =>
+{
+    var item = await db.ShoppingItems.FindAsync(id);
+    if (item is null) return Results.NotFound();
+    item.Purchased = !item.Purchased;
+    await db.SaveChangesAsync();
+    return Results.Ok(item);
+});
+
+// DELETE /api/shopping-items/{id}
+app.MapDelete("/api/shopping-items/{id:int}", async (int id, AppDbContext db) =>
+{
+    var item = await db.ShoppingItems.FindAsync(id);
+    if (item is null) return Results.NotFound();
+    db.ShoppingItems.Remove(item);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
+// POST /api/weeks/{weekId}/shopping-items/reset — uncheck all items
+app.MapPost("/api/weeks/{weekId:int}/shopping-items/reset", async (int weekId, AppDbContext db) =>
+{
+    await db.ShoppingItems
+        .Where(s => s.WeekId == weekId && s.Purchased)
+        .ExecuteUpdateAsync(s => s.SetProperty(x => x.Purchased, false));
+    return Results.NoContent();
+});
 
 // --- Staples ---
 
@@ -118,15 +183,6 @@ app.MapPost("/api/staples", async (StapleRequest req, AppDbContext db) =>
     return Results.Created($"/api/staples/{item.Id}", item);
 });
 
-app.MapPatch("/api/staples/{id:int}/purchased", async (int id, AppDbContext db) =>
-{
-    var item = await db.Staples.FindAsync(id);
-    if (item is null) return Results.NotFound();
-    item.Purchased = !item.Purchased;
-    await db.SaveChangesAsync();
-    return Results.Ok(item);
-});
-
 app.MapDelete("/api/staples/{id:int}", async (int id, AppDbContext db) =>
 {
     var item = await db.Staples.FindAsync(id);
@@ -136,24 +192,13 @@ app.MapDelete("/api/staples/{id:int}", async (int id, AppDbContext db) =>
     return Results.NoContent();
 });
 
-// Reset all purchased flags (start of new shopping trip)
-app.MapPost("/api/staples/reset-purchased", async (AppDbContext db) =>
-{
-    await db.Staples.Where(s => s.Purchased).ExecuteUpdateAsync(s => s.SetProperty(x => x.Purchased, false));
-    return Results.NoContent();
-});
-
 app.Run();
 
 // --- Helpers ---
 
 static DateOnly GetCurrentSunday() => ToSunday(DateOnly.FromDateTime(DateTime.Now));
 
-static DateOnly ToSunday(DateOnly date)
-{
-    var diff = (int)date.DayOfWeek; // DayOfWeek.Sunday == 0
-    return date.AddDays(-diff);
-}
+static DateOnly ToSunday(DateOnly date) => date.AddDays(-(int)date.DayOfWeek);
 
 static async Task<Week> GetOrCreateWeek(AppDbContext db, DateOnly sunday)
 {
@@ -184,13 +229,11 @@ static string DayName(int dow) => dow switch
 
 static IEnumerable<string> ParseIngredients(string text) =>
     text.Split(['\n', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        .Where(s => !string.IsNullOrWhiteSpace(s))
-        .Distinct(StringComparer.OrdinalIgnoreCase);
+        .Where(s => !string.IsNullOrWhiteSpace(s));
 
-// --- DTOs / Records ---
+// --- DTOs ---
 
 record WeekDto(int Id, DateOnly StartDate, List<DayDto> Days);
 record DayDto(int Id, int DayOfWeek, string DayName, string Meal, string Notes, string Ingredients);
 record DayPatchRequest(string? Meal, string? Notes, string? Ingredients);
 record StapleRequest(string Name);
-record ShoppingItemDto(int Id, string Name, bool Purchased, string Source, string? DayName);

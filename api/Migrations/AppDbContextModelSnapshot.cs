@@ -48,6 +48,33 @@ namespace MealPlanner.Api.Migrations
                     b.ToTable("DayPlans");
                 });
 
+            modelBuilder.Entity("MealPlanner.Api.Models.ShoppingItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("DayPlanId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Purchased")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("WeekId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ShoppingItems");
+                });
+
             modelBuilder.Entity("MealPlanner.Api.Models.StapleItem", b =>
                 {
                     b.Property<int>("Id")

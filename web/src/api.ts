@@ -1,4 +1,4 @@
-import type { WeekDto, DayDto, StapleItem, ShoppingResponse } from './types'
+import type { WeekDto, DayDto, StapleItem, ShoppingItem } from './types'
 
 const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api'
 
@@ -27,8 +27,24 @@ export async function patchDay(id: number, patch: Partial<Pick<DayDto, 'meal' | 
   }))
 }
 
-export async function fetchShopping(weekId: number): Promise<ShoppingResponse> {
-  return json(await fetch(`${BASE}/weeks/${weekId}/shopping`))
+export async function fetchShoppingItems(weekId: number): Promise<ShoppingItem[]> {
+  return json(await fetch(`${BASE}/weeks/${weekId}/shopping-items`))
+}
+
+export async function generateShoppingItems(weekId: number): Promise<ShoppingItem[]> {
+  return json(await fetch(`${BASE}/weeks/${weekId}/shopping-items/generate`, { method: 'POST' }))
+}
+
+export async function toggleShoppingItemPurchased(id: number): Promise<ShoppingItem> {
+  return json(await fetch(`${BASE}/shopping-items/${id}/purchased`, { method: 'PATCH' }))
+}
+
+export async function deleteShoppingItem(id: number): Promise<void> {
+  await fetch(`${BASE}/shopping-items/${id}`, { method: 'DELETE' })
+}
+
+export async function resetShoppingItems(weekId: number): Promise<void> {
+  await fetch(`${BASE}/weeks/${weekId}/shopping-items/reset`, { method: 'POST' })
 }
 
 export async function fetchStaples(): Promise<StapleItem[]> {
@@ -43,14 +59,6 @@ export async function addStaple(name: string): Promise<StapleItem> {
   }))
 }
 
-export async function toggleStaplePurchased(id: number): Promise<StapleItem> {
-  return json(await fetch(`${BASE}/staples/${id}/purchased`, { method: 'PATCH' }))
-}
-
 export async function deleteStaple(id: number): Promise<void> {
   await fetch(`${BASE}/staples/${id}`, { method: 'DELETE' })
-}
-
-export async function resetStaplesPurchased(): Promise<void> {
-  await fetch(`${BASE}/staples/reset-purchased`, { method: 'POST' })
 }

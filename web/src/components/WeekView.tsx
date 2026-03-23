@@ -4,7 +4,7 @@ import { fetchWeekByDate, fetchCurrentWeek } from '../api'
 import { DayCard } from './DayCard'
 
 interface Props {
-  onShowShopping: (weekId: number) => void
+  onShowShopping: (week: WeekDto) => void
 }
 
 function addDays(date: Date, n: number) {
@@ -79,7 +79,7 @@ export function WeekView({ onShowShopping }: Props) {
         </span>
 
         <button
-          onClick={() => week && onShowShopping(week.id)}
+          onClick={() => week && onShowShopping(week)}
           disabled={!week}
           className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-sm font-medium disabled:opacity-30 whitespace-nowrap"
         >

@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Week> Weeks => Set<Week>();
     public DbSet<DayPlan> DayPlans => Set<DayPlan>();
     public DbSet<StapleItem> Staples => Set<StapleItem>();
+    public DbSet<ShoppingItem> ShoppingItems => Set<ShoppingItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

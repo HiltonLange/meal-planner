@@ -20,7 +20,11 @@ export interface StapleItem {
   addedDate: string
 }
 
-export interface ShoppingResponse {
-  dayItems: { id: number; name: string; purchased: boolean; source: string; dayName: string }[]
-  stapleItems: { id: number; name: string; purchased: boolean; source: string; dayName: string | null }[]
+export interface ShoppingItem {
+  id: number
+  weekId: number
+  dayPlanId: number | null
+  name: string
+  purchased: boolean
+  sortOrder: number
 }

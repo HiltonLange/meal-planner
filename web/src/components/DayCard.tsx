@@ -14,10 +14,9 @@ function formatDate(d: Date) {
 export function DayCard({ day, date }: Props) {
   const [meal, setMeal] = useState(day.meal)
   const [notes, setNotes] = useState(day.notes)
-  const [ingredients, setIngredients] = useState(day.ingredients)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const save = useCallback((patch: Partial<Pick<DayDto, 'meal' | 'notes' | 'ingredients'>>) => {
+  const save = useCallback((patch: Partial<Pick<DayDto, 'meal' | 'notes'>>) => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => patchDay(day.id, patch), 600)
   }, [day.id])
@@ -29,35 +28,19 @@ export function DayCard({ day, date }: Props) {
         <span className="text-sm text-slate-400">{formatDate(date)}</span>
       </div>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-slate-500">Meal</span>
-        <input
-          className="bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-500"
-          placeholder="what are we having?"
-          value={meal}
-          onChange={e => { setMeal(e.target.value); save({ meal: e.target.value }) }}
-        />
-      </label>
+      <input
+        className="bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-500"
+        placeholder="what are we having?"
+        value={meal}
+        onChange={e => { setMeal(e.target.value); save({ meal: e.target.value }) }}
+      />
 
-      <label className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-slate-500">Notes</span>
-        <input
-          className="bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-500"
-          placeholder="BYT, kids out 8pm..."
-          value={notes}
-          onChange={e => { setNotes(e.target.value); save({ notes: e.target.value }) }}
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-slate-500">Need</span>
-        <textarea
-          className="bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-500 min-h-[72px]"
-          placeholder="tomato paste, garlic, bread..."
-          value={ingredients}
-          onChange={e => { setIngredients(e.target.value); save({ ingredients: e.target.value }) }}
-        />
-      </label>
+      <input
+        className="bg-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-500"
+        placeholder="notes — BYT, kids out 8pm, hot day..."
+        value={notes}
+        onChange={e => { setNotes(e.target.value); save({ notes: e.target.value }) }}
+      />
     </div>
   )
 }
