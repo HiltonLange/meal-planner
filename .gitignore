@@ -1,6 +1,8 @@
 # .NET
 api/bin/
 api/obj/
+api/publish/
+api/publish.zip
 api/*.db
 api/*.db-shm
 api/*.db-wal
