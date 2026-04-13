@@ -4,8 +4,7 @@ import { patchDay, fetchStaples, addStaple, deleteStaple, generateShoppingItems 
 
 interface Props {
   week: WeekDto
-  onStartShopping: () => void
-  onBack: () => void
+  onDone: () => void
 }
 
 function IngredientField({ day }: { day: DayDto }) {
@@ -35,7 +34,7 @@ function IngredientField({ day }: { day: DayDto }) {
   )
 }
 
-export function ListBuilder({ week, onStartShopping, onBack }: Props) {
+export function ListBuilder({ week, onDone }: Props) {
   const [staples, setStaples] = useState<StapleItem[]>([])
   const [newStaple, setNewStaple] = useState('')
   const [generating, setGenerating] = useState(false)
@@ -60,22 +59,19 @@ export function ListBuilder({ week, onStartShopping, onBack }: Props) {
   async function handleStartShopping() {
     setGenerating(true)
     await generateShoppingItems(week.id)
-    onStartShopping()
+    onDone()
   }
 
   const mealsWithIngredients = week.days.filter(d => d.meal.trim())
 
   return (
-    <div className="flex flex-col min-h-svh bg-slate-900">
-      <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-4 py-3 flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 text-xl leading-none"
-        >‹</button>
-        <span className="font-semibold text-slate-100 flex-1">Shopping List</span>
+    <div className="flex flex-col">
+      <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-4 py-3">
+        <span className="font-semibold text-slate-100">Build List</span>
+        <p className="text-xs text-slate-500 mt-0.5">Ingredients per meal + anything else you need</p>
       </div>
 
-      <div className="flex flex-col gap-5 p-4 pb-32">
+      <div className="flex flex-col gap-5 p-4 pb-28">
 
         {/* Ingredients per meal */}
         {mealsWithIngredients.length === 0 ? (
@@ -117,14 +113,14 @@ export function ListBuilder({ week, onStartShopping, onBack }: Props) {
         </div>
       </div>
 
-      {/* Sticky bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-900/95 backdrop-blur border-t border-slate-700">
+      {/* Bottom CTA, sits above the tab bar */}
+      <div className="fixed bottom-14 left-0 right-0 p-3 bg-gradient-to-t from-slate-900 via-slate-900/95 to-transparent">
         <button
           onClick={handleStartShopping}
           disabled={generating || mealsWithIngredients.length === 0}
-          className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold text-lg disabled:opacity-40"
+          className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold disabled:opacity-40"
         >
-          {generating ? 'Generating…' : 'Start Shopping →'}
+          {generating ? 'Generating…' : 'Generate & Start Shopping →'}
         </button>
       </div>
     </div>

@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react'
 import type { WeekDto } from '../types'
-import { fetchWeekByDate, fetchCurrentWeek } from '../api'
 import { DayCard } from './DayCard'
 
 interface Props {
-  onShowShopping: (week: WeekDto) => void
+  week: WeekDto | null
+  currentSunday: Date
+  isCurrentWeek: boolean
+  onPrev: () => void
+  onNext: () => void
+  onToday: () => void
+  onWeekUpdated: (week: WeekDto) => void
 }
 
 function addDays(date: Date, n: number) {
@@ -13,90 +17,60 @@ function addDays(date: Date, n: number) {
   return d
 }
 
-function toSunday(date: Date) {
-  const d = new Date(date)
-  d.setDate(d.getDate() - d.getDay())
-  return d
-}
-
-function toIso(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
 function formatWeekLabel(startDate: string) {
   const d = new Date(startDate + 'T00:00:00')
-  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  const end = addDays(d, 6)
+  const sameMonth = d.getMonth() === end.getMonth()
+  const start = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const endStr = end.toLocaleDateString('en-US', sameMonth ? { day: 'numeric' } : { month: 'short', day: 'numeric' })
+  return `${start} – ${endStr}`
 }
 
-export function WeekView({ onShowShopping }: Props) {
-  const [week, setWeek] = useState<WeekDto | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [currentSunday, setCurrentSunday] = useState<Date>(() => toSunday(new Date()))
-
-  useEffect(() => {
-    setLoading(true)
-    const isCurrentWeek = toIso(currentSunday) === toIso(toSunday(new Date()))
-    const load = isCurrentWeek
-      ? fetchCurrentWeek()
-      : fetchWeekByDate(toIso(currentSunday))
-    load.then(w => { setWeek(w); setLoading(false) })
-  }, [currentSunday])
-
-  const goBack = () => setCurrentSunday(d => addDays(d, -7))
-  const goForward = () => setCurrentSunday(d => addDays(d, 7))
-  const goToday = () => setCurrentSunday(toSunday(new Date()))
-
-  const isCurrentWeek = toIso(currentSunday) === toIso(toSunday(new Date()))
-
+export function WeekView({ week, isCurrentWeek, onPrev, onNext, onToday, onWeekUpdated }: Props) {
   return (
-    <div className="flex flex-col min-h-svh bg-slate-900">
-      {/* Header */}
+    <div className="flex flex-col">
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-4 py-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={goBack}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 active:bg-slate-600 text-xl leading-none"
-            aria-label="Previous week"
-          >‹</button>
-          <button
-            onClick={goForward}
-            disabled={isCurrentWeek}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 active:bg-slate-600 disabled:opacity-30 text-xl leading-none"
-            aria-label="Next week"
-          >›</button>
+        <button
+          onClick={onPrev}
+          className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 text-xl leading-none"
+          aria-label="Previous week"
+        >‹</button>
+
+        <div className="flex-1 flex items-center justify-center gap-2">
+          <span className="text-sm font-medium text-slate-200 truncate">
+            {week ? formatWeekLabel(week.startDate) : '…'}
+          </span>
           {!isCurrentWeek && (
             <button
-              onClick={goToday}
-              className="ml-1 px-3 py-1 rounded-lg text-xs text-emerald-400 border border-emerald-700 hover:bg-emerald-900/40"
+              onClick={onToday}
+              className="px-2 py-0.5 rounded text-xs text-emerald-400 border border-emerald-700 hover:bg-emerald-900/40"
             >
-              This week
+              Today
             </button>
           )}
         </div>
 
-        <span className="text-sm font-medium text-slate-300 text-center flex-1 truncate">
-          {week ? `Week of ${formatWeekLabel(week.startDate)}` : '…'}
-        </span>
-
         <button
-          onClick={() => week && onShowShopping(week)}
-          disabled={!week}
-          className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-sm font-medium disabled:opacity-30 whitespace-nowrap"
-        >
-          Shopping
-        </button>
+          onClick={onNext}
+          className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 text-xl leading-none"
+          aria-label="Next week"
+        >›</button>
       </div>
 
-      {/* Day cards */}
-      <div className="flex flex-col gap-3 p-4 pb-8">
-        {loading && (
-          <div className="text-center text-slate-500 py-16">Loading…</div>
-        )}
-        {!loading && week && week.days.map((day, i) => (
+      <div className="flex flex-col gap-2 p-3">
+        {!week && <div className="text-center text-slate-500 py-16">Loading…</div>}
+        {week && week.days.map((day, i) => (
           <DayCard
             key={day.id}
             day={day}
             date={addDays(new Date(week.startDate + 'T00:00:00'), i)}
+            optional={day.dayOfWeek === 6}
+            onDayUpdated={updated => {
+              onWeekUpdated({
+                ...week,
+                days: week.days.map(d => d.id === updated.id ? updated : d),
+              })
+            }}
           />
         ))}
       </div>

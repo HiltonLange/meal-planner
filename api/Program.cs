@@ -203,12 +203,24 @@ static DateOnly ToSunday(DateOnly date) => date.AddDays(-(int)date.DayOfWeek);
 static async Task<Week> GetOrCreateWeek(AppDbContext db, DateOnly sunday)
 {
     var week = await db.Weeks.Include(w => w.Days).FirstOrDefaultAsync(w => w.StartDate == sunday);
-    if (week is not null) return week;
+    if (week is null)
+    {
+        week = new Week { StartDate = sunday };
+        week.Days = Enumerable.Range(0, 7).Select(i => new DayPlan { DayOfWeek = i }).ToList();
+        db.Weeks.Add(week);
+        await db.SaveChangesAsync();
+        return week;
+    }
 
-    week = new Week { StartDate = sunday };
-    week.Days = Enumerable.Range(0, 6).Select(i => new DayPlan { DayOfWeek = i }).ToList();
-    db.Weeks.Add(week);
-    await db.SaveChangesAsync();
+    // Backfill any missing days (e.g. legacy weeks created with only Sun–Fri)
+    var present = week.Days.Select(d => d.DayOfWeek).ToHashSet();
+    var missing = Enumerable.Range(0, 7).Where(i => !present.Contains(i)).ToList();
+    if (missing.Count > 0)
+    {
+        foreach (var dow in missing)
+            week.Days.Add(new DayPlan { DayOfWeek = dow, WeekId = week.Id });
+        await db.SaveChangesAsync();
+    }
     return week;
 }
 
@@ -223,7 +235,7 @@ static DayDto ToDayDto(DayPlan d) => new(d.Id, d.DayOfWeek, DayName(d.DayOfWeek)
 static string DayName(int dow) => dow switch
 {
     0 => "Sunday", 1 => "Monday", 2 => "Tuesday",
-    3 => "Wednesday", 4 => "Thursday", 5 => "Friday",
+    3 => "Wednesday", 4 => "Thursday", 5 => "Friday", 6 => "Saturday",
     _ => "?"
 };
 

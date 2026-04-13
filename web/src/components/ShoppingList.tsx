@@ -6,10 +6,9 @@ const POLL_INTERVAL = 4000
 
 interface Props {
   weekId: number
-  onBack: () => void
 }
 
-export function ShoppingList({ weekId, onBack }: Props) {
+export function ShoppingList({ weekId }: Props) {
   const [items, setItems] = useState<ShoppingItem[]>([])
   const [loading, setLoading] = useState(true)
   // Track optimistic toggles so the UI feels instant
@@ -65,12 +64,8 @@ export function ShoppingList({ weekId, onBack }: Props) {
   const checkedCount = purchased.length
 
   return (
-    <div className="flex flex-col min-h-svh bg-slate-900">
+    <div className="flex flex-col">
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-4 py-3 flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 text-xl leading-none"
-        >‹</button>
         <span className="font-semibold text-slate-100 flex-1">Shopping</span>
         {totalCount > 0 && (
           <span className="text-sm text-slate-400">{checkedCount}/{totalCount}</span>
