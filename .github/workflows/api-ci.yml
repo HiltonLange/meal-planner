@@ -1,0 +1,66 @@
+name: API CI/CD
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'api/**'
+      - '.github/workflows/api-ci.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'api/**'
+      - '.github/workflows/api-ci.yml'
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  AZURE_WEBAPP_NAME: hilton-meal-planner-api
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      # Uncomment when test project exists:
+      # - name: Test
+      #   run: dotnet test --no-build -c Release
+
+      - name: Publish
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: dotnet publish -c Release -o publish --no-build
+
+      - name: Create deployment package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          python3 -c "
+          import os, zipfile
+          with zipfile.ZipFile('publish.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+              for dirpath, _, files in os.walk('publish'):
+                  for f in files:
+                      full = os.path.join(dirpath, f)
+                      z.write(full, os.path.relpath(full, 'publish').replace(os.sep, '/'))
+          "
+
+      - name: Deploy to Azure App Service
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: api/publish.zip
