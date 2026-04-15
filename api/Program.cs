@@ -4,8 +4,11 @@ using MealPlanner.Api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? "Data Source=mealplanner.db";
+
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseSqlite("Data Source=mealplanner.db"));
+    opt.UseSqlite(connectionString));
 
 builder.Services.AddCors(opt =>
 {
@@ -17,6 +20,12 @@ builder.Services.AddCors(opt =>
 });
 
 var app = builder.Build();
+
+// Ensure the DB directory exists (e.g. /home/data/ on App Service)
+var dbPath = connectionString.Replace("Data Source=", "");
+var dbDir = Path.GetDirectoryName(dbPath);
+if (!string.IsNullOrEmpty(dbDir))
+    Directory.CreateDirectory(dbDir);
 
 // Apply migrations on startup (skip for non-relational providers like InMemory)
 using (var scope = app.Services.CreateScope())
