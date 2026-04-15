@@ -6,6 +6,8 @@ api/publish.zip
 api/*.db
 api/*.db-shm
 api/*.db-wal
+tests/bin/
+tests/obj/
 
 # Node
 web/node_modules/
