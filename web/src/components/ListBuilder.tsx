@@ -7,14 +7,90 @@ interface Props {
   onDone: () => void
 }
 
-function IngredientField({ day }: { day: DayDto }) {
-  const [value, setValue] = useState(day.ingredients)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+function parseChips(text: string): string[] {
+  return text
+    .split(/[,\n]/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+}
 
-  const save = useCallback((text: string) => {
+function serializeChips(chips: string[]): string {
+  return chips.join(', ')
+}
+
+function IngredientField({ day }: { day: DayDto }) {
+  const [chips, setChips] = useState<string[]>(() => parseChips(day.ingredients))
+  const [inputValue, setInputValue] = useState('')
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const save = useCallback((updatedChips: string[]) => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => patchDay(day.id, { ingredients: text }), 600)
+    saveTimer.current = setTimeout(() => {
+      patchDay(day.id, { ingredients: serializeChips(updatedChips) })
+    }, 600)
   }, [day.id])
+
+  // Flush pending input on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  }, [])
+
+  function commitInput(text: string, newChips?: string[]) {
+    const parsed = parseChips(text)
+    if (parsed.length === 0) return newChips ?? chips
+    const updated = [...(newChips ?? chips), ...parsed]
+    setChips(updated)
+    setInputValue('')
+    save(updated)
+    return updated
+  }
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value
+    // Split immediately on comma or newline
+    if (val.includes(',') || val.includes('\n')) {
+      commitInput(val)
+    } else {
+      setInputValue(val)
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      commitInput(inputValue)
+    }
+    if (e.key === 'Backspace' && inputValue === '' && chips.length > 0) {
+      // Pop last chip back into input for editing
+      const last = chips[chips.length - 1]
+      const updated = chips.slice(0, -1)
+      setChips(updated)
+      setInputValue(last)
+      save(updated)
+    }
+  }
+
+  function handleBlur() {
+    if (inputValue.trim()) {
+      commitInput(inputValue)
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault()
+    const text = e.clipboardData.getData('text')
+    commitInput(inputValue + text)
+  }
+
+  function removeChip(index: number) {
+    const updated = chips.filter((_, i) => i !== index)
+    setChips(updated)
+    save(updated)
+    inputRef.current?.focus()
+  }
 
   if (!day.meal.trim()) return null
 
@@ -24,12 +100,34 @@ function IngredientField({ day }: { day: DayDto }) {
         <span className="text-sm font-medium text-slate-200">{day.dayName}</span>
         <span className="text-xs text-slate-500">{day.meal}</span>
       </div>
-      <textarea
-        className="bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-500 min-h-[64px]"
-        placeholder="tomato paste, garlic, bread..."
-        value={value}
-        onChange={e => { setValue(e.target.value); save(e.target.value) }}
-      />
+      <div
+        className="bg-slate-700 rounded-lg px-2 py-2 flex flex-wrap gap-1.5 min-h-[44px] cursor-text focus-within:ring-2 focus-within:ring-emerald-500"
+        onClick={() => inputRef.current?.focus()}
+      >
+        {chips.map((chip, i) => (
+          <span
+            key={`${i}-${chip}`}
+            className="inline-flex items-center gap-1 bg-slate-600 text-slate-100 text-sm rounded-md px-2.5 py-1"
+          >
+            {chip}
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); removeChip(i) }}
+              className="text-slate-400 hover:text-red-400 text-xs leading-none ml-0.5"
+            >×</button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          className="flex-1 min-w-[120px] bg-transparent text-slate-100 text-sm outline-none placeholder:text-slate-500 py-1"
+          placeholder={chips.length === 0 ? 'tomato paste, garlic, bread...' : 'add more...'}
+          value={inputValue}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          onPaste={handlePaste}
+        />
+      </div>
     </div>
   )
 }

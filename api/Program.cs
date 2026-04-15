@@ -8,24 +8,44 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlite("Data Source=mealplanner.db"));
 
 builder.Services.AddCors(opt =>
+{
+    var origins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
     opt.AddDefaultPolicy(p => p
-        .WithOrigins(
-            "http://localhost:5173",
-            "https://green-pebble-0bad19b10.1.azurestaticapps.net"
-        )
+        .WithOrigins(origins)
         .AllowAnyMethod()
-        .AllowAnyHeader()));
+        .AllowAnyHeader());
+});
 
 var app = builder.Build();
 
-// Apply migrations on startup
+// Apply migrations on startup (skip for non-relational providers like InMemory)
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    if (db.Database.IsRelational())
+        db.Database.Migrate();
+    else
+        db.Database.EnsureCreated();
 }
 
 app.UseCors();
+
+// --- Health ---
+
+app.MapGet("/api/health", async (AppDbContext db) =>
+{
+    try
+    {
+        await db.Database.CanConnectAsync();
+        return Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+    }
+    catch
+    {
+        return Results.Json(
+            new { status = "unhealthy", timestamp = DateTime.UtcNow },
+            statusCode: 503);
+    }
+});
 
 // --- Weeks ---
 
@@ -85,52 +105,93 @@ app.MapGet("/api/weeks/{weekId:int}/shopping-items", async (int weekId, AppDbCon
 });
 
 // POST /api/weeks/{weekId}/shopping-items/generate
-// Clears unpurchased items and regenerates from current day ingredients + staples.
-// Already-purchased items are preserved.
+// Idempotent: reconciles shopping items against current ingredients + staples.
+// Purchased items are preserved; duplicates are prevented; orphans are cleaned up.
 app.MapPost("/api/weeks/{weekId:int}/shopping-items/generate", async (int weekId, AppDbContext db) =>
 {
     var week = await db.Weeks.Include(w => w.Days).FirstOrDefaultAsync(w => w.Id == weekId);
     if (week is null) return Results.NotFound();
 
-    // Remove unpurchased items
-    await db.ShoppingItems
-        .Where(s => s.WeekId == weekId && !s.Purchased)
-        .ExecuteDeleteAsync();
+    // Build desired set, deduped by (dayPlanId, normalizedName)
+    var desired = new List<(int? DayPlanId, string Name)>();
+    var seen = new HashSet<(int?, string)>();
 
-    var newItems = new List<ShoppingItem>();
-    int order = 0;
-
-    // Day ingredients
     foreach (var day in week.Days.OrderBy(d => d.DayOfWeek))
     {
         foreach (var name in ParseIngredients(day.Ingredients))
         {
-            newItems.Add(new ShoppingItem
-            {
-                WeekId = weekId,
-                DayPlanId = day.Id,
-                Name = name,
-                Purchased = false,
-                SortOrder = order++
-            });
+            var key = (DayPlanId: (int?)day.Id, name.Trim().ToLowerInvariant());
+            if (seen.Add(key))
+                desired.Add((day.Id, name));
         }
     }
 
-    // Staples
     var staples = await db.Staples.OrderBy(s => s.AddedDate).ToListAsync();
     foreach (var staple in staples)
     {
-        newItems.Add(new ShoppingItem
-        {
-            WeekId = weekId,
-            DayPlanId = null,
-            Name = staple.Name,
-            Purchased = false,
-            SortOrder = order++
-        });
+        var key = (DayPlanId: (int?)null, staple.Name.Trim().ToLowerInvariant());
+        if (seen.Add(key))
+            desired.Add((null, staple.Name));
     }
 
-    db.ShoppingItems.AddRange(newItems);
+    // Fetch all existing items for this week
+    var existing = await db.ShoppingItems
+        .Where(s => s.WeekId == weekId)
+        .ToListAsync();
+
+    var existingByKey = existing
+        .GroupBy(e => (e.DayPlanId, e.Name.Trim().ToLowerInvariant()))
+        .ToDictionary(g => g.Key, g => g.ToList());
+
+    var keepItems = new List<ShoppingItem>();
+    var deleteItems = new List<ShoppingItem>();
+
+    // For each desired item, keep exactly one existing row (prefer purchased)
+    foreach (var (dayPlanId, name) in desired)
+    {
+        var key = (dayPlanId, name.Trim().ToLowerInvariant());
+        if (existingByKey.TryGetValue(key, out var matches))
+        {
+            var keeper = matches.FirstOrDefault(m => m.Purchased) ?? matches[0];
+            keepItems.Add(keeper);
+            deleteItems.AddRange(matches.Where(m => m != keeper));
+            existingByKey.Remove(key);
+        }
+        else
+        {
+            // New item — create it
+            var item = new ShoppingItem
+            {
+                WeekId = weekId,
+                DayPlanId = dayPlanId,
+                Name = name,
+                Purchased = false,
+                SortOrder = 0
+            };
+            db.ShoppingItems.Add(item);
+            keepItems.Add(item);
+        }
+    }
+
+    // Remaining existing items are orphans — delete unpurchased, keep purchased
+    foreach (var orphanGroup in existingByKey.Values)
+    {
+        foreach (var orphan in orphanGroup)
+        {
+            if (orphan.Purchased)
+                keepItems.Add(orphan);
+            else
+                deleteItems.Add(orphan);
+        }
+    }
+
+    db.ShoppingItems.RemoveRange(deleteItems);
+
+    // Recompute sort order in canonical sequence
+    int order = 0;
+    foreach (var item in keepItems)
+        item.SortOrder = order++;
+
     await db.SaveChangesAsync();
 
     var all = await db.ShoppingItems
@@ -249,3 +310,6 @@ record WeekDto(int Id, DateOnly StartDate, List<DayDto> Days);
 record DayDto(int Id, int DayOfWeek, string DayName, string Meal, string Notes, string Ingredients);
 record DayPatchRequest(string? Meal, string? Notes, string? Ingredients);
 record StapleRequest(string Name);
+
+// Allow WebApplicationFactory to reference the entry point
+public partial class Program { }
