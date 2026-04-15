@@ -13,6 +13,9 @@ tests/obj/
 web/node_modules/
 web/dist/
 
+# Azure CLI (sandboxed via AZURE_CONFIG_DIR)
+.azure/
+
 # Editor
 .vs/
 .vscode/
