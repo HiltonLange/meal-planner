@@ -5,11 +5,13 @@ on:
     branches: [master]
     paths:
       - 'api/**'
+      - 'tests/**'
       - '.github/workflows/api-ci.yml'
   pull_request:
     branches: [master]
     paths:
       - 'api/**'
+      - 'tests/**'
       - '.github/workflows/api-ci.yml'
 
 env:
@@ -37,9 +39,8 @@ jobs:
       - name: Build
         run: dotnet build --no-restore -c Release
 
-      # Uncomment when test project exists:
-      # - name: Test
-      #   run: dotnet test --no-build -c Release
+      - name: Test
+        run: dotnet test ../tests/MealPlanner.Tests.csproj --no-restore -c Release
 
       - name: Publish
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'

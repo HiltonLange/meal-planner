@@ -1,8 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using MealPlanner.Api.Data;
 using MealPlanner.Api.Models;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Application Insights via OpenTelemetry (reads APPLICATIONINSIGHTS_CONNECTION_STRING from env)
+if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
+    builder.Services.AddOpenTelemetry().UseAzureMonitor();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Data Source=mealplanner.db";
