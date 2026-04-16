@@ -292,17 +292,6 @@ static async Task<Week> GetOrCreateWeek(AppDbContext db, DateOnly sunday)
         week.Days = Enumerable.Range(0, 7).Select(i => new DayPlan { DayOfWeek = i }).ToList();
         db.Weeks.Add(week);
         await db.SaveChangesAsync();
-        return week;
-    }
-
-    // Backfill any missing days (e.g. legacy weeks created with only Sun–Fri)
-    var present = week.Days.Select(d => d.DayOfWeek).ToHashSet();
-    var missing = Enumerable.Range(0, 7).Where(i => !present.Contains(i)).ToList();
-    if (missing.Count > 0)
-    {
-        foreach (var dow in missing)
-            week.Days.Add(new DayPlan { DayOfWeek = dow, WeekId = week.Id });
-        await db.SaveChangesAsync();
     }
     return week;
 }
