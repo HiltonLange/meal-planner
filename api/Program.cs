@@ -50,6 +50,8 @@ using (var scope = app.Services.CreateScope())
 
 app.UseCors();
 
+app.MapGet("/", () => Results.Redirect("/api/health"));
+
 // --- Health ---
 
 app.MapGet("/api/health", async (AppDbContext db) =>
