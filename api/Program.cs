@@ -32,9 +32,15 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     if (db.Database.IsRelational())
+    {
+        // WAL journal mode uses mmap which fails on Azure Files (SMB) — use DELETE instead
+        db.Database.ExecuteSqlRaw("PRAGMA journal_mode=DELETE;");
         db.Database.Migrate();
+    }
     else
+    {
         db.Database.EnsureCreated();
+    }
 }
 
 app.UseCors();
