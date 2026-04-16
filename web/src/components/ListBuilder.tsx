@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle, createRef } from 'react'
 import type { WeekDto, DayDto, StapleItem } from '../types'
 import { patchDay, fetchStaples, addStaple, deleteStaple, generateShoppingItems } from '../api'
 
@@ -18,11 +18,25 @@ function serializeChips(chips: string[]): string {
   return chips.join(', ')
 }
 
-function IngredientField({ day }: { day: DayDto }) {
+interface IngredientFieldHandle {
+  flush: () => Promise<void>
+}
+
+const IngredientField = forwardRef<IngredientFieldHandle, { day: DayDto }>(
+  function IngredientField({ day }, ref) {
   const [chips, setChips] = useState<string[]>(() => parseChips(day.ingredients))
   const [inputValue, setInputValue] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const chipsRef = useRef(chips)
+  const inputValueRef = useRef(inputValue)
+  chipsRef.current = chips
+  inputValueRef.current = inputValue
+
+  function saveNow(updatedChips: string[]): Promise<void> {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    return patchDay(day.id, { ingredients: serializeChips(updatedChips) }).then(() => {})
+  }
 
   const save = useCallback((updatedChips: string[]) => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -31,7 +45,21 @@ function IngredientField({ day }: { day: DayDto }) {
     }, 600)
   }, [day.id])
 
-  // Flush pending input on unmount
+  useImperativeHandle(ref, () => ({
+    flush: () => {
+      const pending = parseChips(inputValueRef.current)
+      const final = pending.length > 0
+        ? [...chipsRef.current, ...pending]
+        : chipsRef.current
+      if (pending.length > 0) {
+        setChips(final)
+        setInputValue('')
+      }
+      return saveNow(final)
+    }
+  }))
+
+  // Clean up timer on unmount
   useEffect(() => {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -130,12 +158,18 @@ function IngredientField({ day }: { day: DayDto }) {
       </div>
     </div>
   )
-}
+})
 
 export function ListBuilder({ week, onDone }: Props) {
   const [staples, setStaples] = useState<StapleItem[]>([])
   const [newStaple, setNewStaple] = useState('')
   const [generating, setGenerating] = useState(false)
+  const mealsWithIngredients = week.days.filter(d => d.meal.trim())
+  const fieldRefs = useRef(mealsWithIngredients.map(() => createRef<IngredientFieldHandle>()))
+
+  useEffect(() => {
+    fieldRefs.current = mealsWithIngredients.map((_, i) => fieldRefs.current[i] ?? createRef())
+  }, [mealsWithIngredients.length])
 
   useEffect(() => {
     fetchStaples().then(setStaples)
@@ -155,12 +189,12 @@ export function ListBuilder({ week, onDone }: Props) {
   }
 
   async function handleStartShopping() {
+    // Flush all uncommitted chip inputs and pending saves
+    await Promise.all(fieldRefs.current.map(r => r.current?.flush()))
     setGenerating(true)
     await generateShoppingItems(week.id)
     onDone()
   }
-
-  const mealsWithIngredients = week.days.filter(d => d.meal.trim())
 
   return (
     <div className="flex flex-col">
@@ -177,8 +211,8 @@ export function ListBuilder({ week, onDone }: Props) {
         ) : (
           <>
             <p className="text-xs uppercase tracking-wide text-slate-500">What do you need to pick up?</p>
-            {mealsWithIngredients.map(day => (
-              <IngredientField key={day.id} day={day} />
+            {mealsWithIngredients.map((day, i) => (
+              <IngredientField key={day.id} ref={fieldRefs.current[i]} day={day} />
             ))}
           </>
         )}
