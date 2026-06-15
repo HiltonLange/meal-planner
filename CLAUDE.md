@@ -78,10 +78,12 @@ shouldn't burn time again:
 Look at open GitHub issues labeled `tech-debt` and `enhancement` for
 the current backlog. Highlights:
 
-- API has no CI, no health check, no App Insights, no HTTPS redirect,
-  and its SQLite DB lives on ephemeral App Service disk.
-- CORS origins are hardcoded in `Program.cs`.
-- No tests anywhere yet.
+- API now HAS CI/CD (`.github/workflows/api-ci.yml`, auto-deploys on
+  push to master), a `/api/health` check, App Insights, and a
+  persistent SQLite DB on `/home/data/` — all done as of 2026-06.
+- Still open: no HTTPS redirect (`httpsOnly` off), no DB backups,
+  CORS origins hardcoded in `Program.cs`.
+- Tests live in `tests/` (xUnit) and run in CI; coverage is light.
 
 Don't fix all of these proactively — they're tracked deliberately.
 Tackle them when Hilton asks or when one is blocking the current task.

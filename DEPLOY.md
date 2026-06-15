@@ -49,9 +49,22 @@ on every push to `master`. The workflow injects
 `VITE_API_URL=https://hilton-meal-planner-api.azurewebsites.net` at build
 time so `web/src/api.ts` points at production.
 
-## API deploy (manual)
+## API deploy (automatic via CI/CD)
 
-No CI wired up yet. Run from `api/`:
+The API deploys **automatically** via GitHub Actions
+(`.github/workflows/api-ci.yml`) on every push to `master` that touches
+`api/**`, `tests/**`, or the workflow file. The job restores, builds,
+runs the tests, then publishes and deploys to App Service using the
+`AZURE_WEBAPP_PUBLISH_PROFILE` secret. EF migrations run on app startup,
+so a schema change ships by merging to `master` — no manual step.
+
+Watch a run: `gh run list --workflow=api-ci.yml` /
+`gh run watch <id>`. Note the API is **B1 with Always On off**, so after
+deploy the first request cold-starts (Kudu/SCM can be slow to wake).
+
+### Manual deploy (fallback only — normally unnecessary)
+
+If CI is down and you must push by hand, run from `api/`:
 
 ```bash
 rm -rf publish publish.zip
