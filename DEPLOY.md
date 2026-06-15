@@ -14,11 +14,33 @@ az account set --subscription 4d5f5be2-3e19-45b2-99d3-cddcdb3b2e37
 |---|---|---|---|
 | Frontend (PWA) | Static Web App `green-pebble-0bad19b10` | (SWA-managed) | https://green-pebble-0bad19b10.1.azurestaticapps.net |
 | API (.NET 9) | App Service `hilton-meal-planner-api` (Linux, DOTNETCORE\|9.0) | `meal-planner-rg` | https://hilton-meal-planner-api.azurewebsites.net |
-| Data | SQLite file on App Service local disk (`mealplanner.db`) | — | — |
+| Data | SQLite file on App Service **persistent** storage (`/home/data/mealplanner.db`) | `meal-planner-rg` | — |
 
-Note: the SQLite DB lives on the App Service filesystem and is wiped on
-every deploy swap / storage reset. That's fine while the app is in its
-infancy — no backcompat needed.
+### Storage / persistence (verified 2026-06-14)
+
+The DB path is **not** the relative `mealplanner.db` in `appsettings.json`.
+Production overrides it via an App Service **connection string** setting:
+
+```
+DefaultConnection = "Data Source=/home/data/mealplanner.db"   (type: Custom)
+```
+
+`/home` on App Service is persistent (backed by Azure Files/SMB), shared
+across instances and **survives restarts, deploys, and scale operations**.
+So the DB is *not* wiped on deploy — it holds real weekly data now.
+
+Two consequences worth remembering:
+
+- **SQLite WAL mode breaks on `/home`** (WAL uses mmap, which fails over
+  SMB). `Program.cs` forces `PRAGMA journal_mode=DELETE;` on startup to
+  avoid this. Don't switch it back to WAL.
+- **There are no backups.** Persistent ≠ backed up. A bad migration,
+  file corruption, or deleting the plan loses everything. A periodic
+  copy of `mealplanner.db` to Blob storage is the obvious next step
+  (not yet done).
+
+App Service Plan: **B1 Basic**, 1 instance. `httpsOnly` is off and
+Always On is off (cold starts after idle — Kudu/SCM can be slow to wake).
 
 ## Frontend deploy
 
