@@ -16,7 +16,13 @@ export function ShoppingList({ weekId }: Props) {
 
   async function load() {
     const fetched = await fetchShoppingItems(weekId)
-    setItems(fetched)
+    // Don't let a poll clobber a toggle that's still mid-flight — keep the
+    // optimistic value for those rows, take server truth for the rest.
+    setItems(prev => {
+      if (pendingToggles.current.size === 0) return fetched
+      const prevById = new Map(prev.map(i => [i.id, i]))
+      return fetched.map(i => pendingToggles.current.has(i.id) ? (prevById.get(i.id) ?? i) : i)
+    })
     setLoading(false)
   }
 
@@ -89,7 +95,7 @@ export function ShoppingList({ weekId }: Props) {
             {showDivider && item.dayPlanId === null && unpurchased.some(i => i.dayPlanId !== null) && (
               <div className="flex items-center gap-3 mt-3 mb-1">
                 <div className="flex-1 h-px bg-slate-700" />
-                <span className="text-xs uppercase tracking-wide text-slate-600">Staples</span>
+                <span className="text-xs uppercase tracking-wide text-slate-600">Extras</span>
                 <div className="flex-1 h-px bg-slate-700" />
               </div>
             )}

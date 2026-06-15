@@ -14,7 +14,8 @@ next to this line". This app is built around the three things that
 actually happen each week:
 
 1. **Plan** — figure out what we're eating Sun through Sat.
-2. **List** — capture what we need to pick up for each meal, plus staples.
+2. **List** — capture what we need to pick up for each meal, plus extras
+   (a per-week catch-all that starts blank each week).
 3. **Shop** — walk through the store ticking items off, with live sync
    so my wife and I can split up and both check things off from our
    own phones.
@@ -50,7 +51,7 @@ The UX reflects that as three phases, swapped via a bottom tab bar.
 api/                 .NET Minimal API
   Program.cs         All routes + helpers (intentionally single-file)
   Data/              EF Core DbContext
-  Models/            Week, DayPlan, StapleItem, ShoppingItem
+  Models/            Week, DayPlan, ExtraItem, ShoppingItem
   Migrations/        EF Core migrations
 web/                 Vite + React PWA
   src/
@@ -60,7 +61,7 @@ web/                 Vite + React PWA
     components/
       WeekView.tsx   Phase 1: plan day-by-day meals
       DayCard.tsx    Compact per-day input (meal + collapsible notes)
-      ListBuilder.tsx Phase 2: capture ingredients per meal + staples
+      ListBuilder.tsx Phase 2: capture ingredients per meal + extras
       ShoppingList.tsx Phase 3: unified checklist with 4s polling
 DEPLOY.md            Azure resources + manual API publish recipe
 CLAUDE.md            Working notes for Claude-assisted development

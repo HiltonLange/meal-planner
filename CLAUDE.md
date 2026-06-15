@@ -6,8 +6,12 @@ Working notes for Claude when assisting on this repo.
 
 Mobile-first PWA for weekly family meal planning. Three-phase UX —
 **Plan** (pick meals Sun–Sat), **List** (capture ingredients per meal +
-staples), **Shop** (unified checklist with 4s polling for concurrent
+extras), **Shop** (unified checklist with 4s polling for concurrent
 use). See `README.md` for the full context.
+
+"Extras" is the per-week catch-all list (the old "staples" — renamed
+2026-06-14). It is scoped to a week and starts blank each week; it does
+*not* carry over. Stored in the `Extras` table (`ExtraItem`, FK to Week).
 
 ## Design rules — do not break these without asking
 

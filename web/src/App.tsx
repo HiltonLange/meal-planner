@@ -54,6 +54,9 @@ export default function App() {
         {phase === 'list' && week && (
           <ListBuilder
             week={week}
+            onDayUpdated={day =>
+              setWeek(w => w ? { ...w, days: w.days.map(d => d.id === day.id ? day : d) } : w)
+            }
             onDone={() => setPhase('shop')}
           />
         )}

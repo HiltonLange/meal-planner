@@ -13,10 +13,10 @@ export interface WeekDto {
   days: DayDto[]
 }
 
-export interface StapleItem {
+export interface ExtraItem {
   id: number
+  weekId: number
   name: string
-  purchased: boolean
   addedDate: string
 }
 

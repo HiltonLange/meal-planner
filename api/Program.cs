@@ -127,7 +127,7 @@ app.MapGet("/api/weeks/{weekId:int}/shopping-items", async (int weekId, AppDbCon
 });
 
 // POST /api/weeks/{weekId}/shopping-items/generate
-// Idempotent: reconciles shopping items against current ingredients + staples.
+// Idempotent: reconciles shopping items against current ingredients + extras.
 // Purchased items are preserved; duplicates are prevented; orphans are cleaned up.
 app.MapPost("/api/weeks/{weekId:int}/shopping-items/generate", async (int weekId, AppDbContext db) =>
 {
@@ -148,12 +148,15 @@ app.MapPost("/api/weeks/{weekId:int}/shopping-items/generate", async (int weekId
         }
     }
 
-    var staples = await db.Staples.OrderBy(s => s.AddedDate).ToListAsync();
-    foreach (var staple in staples)
+    var extras = await db.Extras
+        .Where(e => e.WeekId == weekId)
+        .OrderBy(e => e.AddedDate)
+        .ToListAsync();
+    foreach (var extra in extras)
     {
-        var key = (DayPlanId: (int?)null, staple.Name.Trim().ToLowerInvariant());
+        var key = (DayPlanId: (int?)null, extra.Name.Trim().ToLowerInvariant());
         if (seen.Add(key))
-            desired.Add((null, staple.Name));
+            desired.Add((null, extra.Name));
     }
 
     // Fetch all existing items for this week
@@ -253,24 +256,28 @@ app.MapPost("/api/weeks/{weekId:int}/shopping-items/reset", async (int weekId, A
     return Results.NoContent();
 });
 
-// --- Staples ---
+// --- Extras (per-week non-meal items; the old "staples" whiteboard list) ---
 
-app.MapGet("/api/staples", async (AppDbContext db) =>
-    Results.Ok(await db.Staples.OrderBy(s => s.AddedDate).ToListAsync()));
+app.MapGet("/api/weeks/{weekId:int}/extras", async (int weekId, AppDbContext db) =>
+    Results.Ok(await db.Extras
+        .Where(e => e.WeekId == weekId)
+        .OrderBy(e => e.AddedDate)
+        .ToListAsync()));
 
-app.MapPost("/api/staples", async (StapleRequest req, AppDbContext db) =>
+app.MapPost("/api/weeks/{weekId:int}/extras", async (int weekId, ExtraRequest req, AppDbContext db) =>
 {
-    var item = new StapleItem { Name = req.Name };
-    db.Staples.Add(item);
+    if (!await db.Weeks.AnyAsync(w => w.Id == weekId)) return Results.NotFound();
+    var item = new ExtraItem { WeekId = weekId, Name = req.Name };
+    db.Extras.Add(item);
     await db.SaveChangesAsync();
-    return Results.Created($"/api/staples/{item.Id}", item);
+    return Results.Created($"/api/extras/{item.Id}", item);
 });
 
-app.MapDelete("/api/staples/{id:int}", async (int id, AppDbContext db) =>
+app.MapDelete("/api/extras/{id:int}", async (int id, AppDbContext db) =>
 {
-    var item = await db.Staples.FindAsync(id);
+    var item = await db.Extras.FindAsync(id);
     if (item is null) return Results.NotFound();
-    db.Staples.Remove(item);
+    db.Extras.Remove(item);
     await db.SaveChangesAsync();
     return Results.NoContent();
 });
@@ -320,7 +327,7 @@ static IEnumerable<string> ParseIngredients(string text) =>
 record WeekDto(int Id, DateOnly StartDate, List<DayDto> Days);
 record DayDto(int Id, int DayOfWeek, string DayName, string Meal, string Notes, string Ingredients);
 record DayPatchRequest(string? Meal, string? Notes, string? Ingredients);
-record StapleRequest(string Name);
+record ExtraRequest(string Name);
 
 // Allow WebApplicationFactory to reference the entry point
 public partial class Program { }

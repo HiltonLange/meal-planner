@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle, createRef } from 'react'
-import type { WeekDto, DayDto, StapleItem } from '../types'
-import { patchDay, fetchStaples, addStaple, deleteStaple, generateShoppingItems } from '../api'
+import type { WeekDto, DayDto, ExtraItem } from '../types'
+import { patchDay, fetchExtras, addExtra, deleteExtra, generateShoppingItems } from '../api'
 
 interface Props {
   week: WeekDto
+  onDayUpdated: (day: DayDto) => void
   onDone: () => void
 }
 
@@ -22,47 +23,64 @@ interface IngredientFieldHandle {
   flush: () => Promise<void>
 }
 
-const IngredientField = forwardRef<IngredientFieldHandle, { day: DayDto }>(
-  function IngredientField({ day }, ref) {
+const IngredientField = forwardRef<IngredientFieldHandle, { day: DayDto; onSaved: (day: DayDto) => void }>(
+  function IngredientField({ day, onSaved }, ref) {
   const [chips, setChips] = useState<string[]>(() => parseChips(day.ingredients))
   const [inputValue, setInputValue] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const chipsRef = useRef(chips)
   const inputValueRef = useRef(inputValue)
+  const onSavedRef = useRef(onSaved)
   chipsRef.current = chips
   inputValueRef.current = inputValue
+  onSavedRef.current = onSaved
 
-  function saveNow(updatedChips: string[]): Promise<void> {
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    return patchDay(day.id, { ingredients: serializeChips(updatedChips) }).then(() => {})
-  }
+  // Persist the given chips to the server and keep the parent week in sync.
+  // Optimistic update first so navigating back shows the latest immediately,
+  // then reconcile with the server's response.
+  const persist = useCallback((updatedChips: string[]): Promise<void> => {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
+    const ingredients = serializeChips(updatedChips)
+    onSavedRef.current({ ...day, ingredients })
+    return patchDay(day.id, { ingredients })
+      .then(updated => { onSavedRef.current(updated) })
+      .catch(() => {})
+  }, [day])
 
-  const save = useCallback((updatedChips: string[]) => {
+  // Latest persist, so the unmount handler can call it without re-subscribing
+  // every time `day` changes (which would fire it mid-edit).
+  const persistRef = useRef(persist)
+  persistRef.current = persist
+
+  // Debounced save during typing.
+  const scheduleSave = useCallback((updatedChips: string[]) => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      patchDay(day.id, { ingredients: serializeChips(updatedChips) })
-    }, 600)
-  }, [day.id])
+    saveTimer.current = setTimeout(() => { persist(updatedChips) }, 600)
+  }, [persist])
 
   useImperativeHandle(ref, () => ({
     flush: () => {
       const pending = parseChips(inputValueRef.current)
-      const final = pending.length > 0
-        ? [...chipsRef.current, ...pending]
-        : chipsRef.current
+      const final = pending.length > 0 ? [...chipsRef.current, ...pending] : chipsRef.current
       if (pending.length > 0) {
         setChips(final)
         setInputValue('')
       }
-      return saveNow(final)
+      return persist(final)
     }
   }))
 
-  // Clean up timer on unmount
+  // On unmount only (e.g. tabbing away), flush any pending edit instead of
+  // dropping it — this is what previously lost the last few seconds of work.
   useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current)
+      const hasPendingInput = inputValueRef.current.trim().length > 0
+      if (saveTimer.current || hasPendingInput) {
+        const pending = parseChips(inputValueRef.current)
+        const final = pending.length > 0 ? [...chipsRef.current, ...pending] : chipsRef.current
+        persistRef.current(final)
+      }
     }
   }, [])
 
@@ -72,7 +90,7 @@ const IngredientField = forwardRef<IngredientFieldHandle, { day: DayDto }>(
     const updated = [...(newChips ?? chips), ...parsed]
     setChips(updated)
     setInputValue('')
-    save(updated)
+    scheduleSave(updated)
     return updated
   }
 
@@ -97,7 +115,7 @@ const IngredientField = forwardRef<IngredientFieldHandle, { day: DayDto }>(
       const updated = chips.slice(0, -1)
       setChips(updated)
       setInputValue(last)
-      save(updated)
+      scheduleSave(updated)
     }
   }
 
@@ -116,7 +134,7 @@ const IngredientField = forwardRef<IngredientFieldHandle, { day: DayDto }>(
   function removeChip(index: number) {
     const updated = chips.filter((_, i) => i !== index)
     setChips(updated)
-    save(updated)
+    scheduleSave(updated)
     inputRef.current?.focus()
   }
 
@@ -160,9 +178,9 @@ const IngredientField = forwardRef<IngredientFieldHandle, { day: DayDto }>(
   )
 })
 
-export function ListBuilder({ week, onDone }: Props) {
-  const [staples, setStaples] = useState<StapleItem[]>([])
-  const [newStaple, setNewStaple] = useState('')
+export function ListBuilder({ week, onDayUpdated, onDone }: Props) {
+  const [extras, setExtras] = useState<ExtraItem[]>([])
+  const [newExtra, setNewExtra] = useState('')
   const [generating, setGenerating] = useState(false)
   const mealsWithIngredients = week.days.filter(d => d.meal.trim())
   const fieldRefs = useRef(mealsWithIngredients.map(() => createRef<IngredientFieldHandle>()))
@@ -172,20 +190,34 @@ export function ListBuilder({ week, onDone }: Props) {
   }, [mealsWithIngredients.length])
 
   useEffect(() => {
-    fetchStaples().then(setStaples)
-  }, [])
+    fetchExtras(week.id).then(setExtras)
+  }, [week.id])
 
-  async function handleAddStaple() {
-    const name = newStaple.trim()
+  // Optimistic: show the item immediately, reconcile the real id from the server.
+  async function handleAddExtra() {
+    const name = newExtra.trim()
     if (!name) return
-    const item = await addStaple(name)
-    setStaples(prev => [...prev, item])
-    setNewStaple('')
+    setNewExtra('')
+    const tempId = -Date.now()
+    setExtras(prev => [...prev, { id: tempId, weekId: week.id, name, addedDate: new Date().toISOString() }])
+    try {
+      const saved = await addExtra(week.id, name)
+      setExtras(prev => prev.map(e => e.id === tempId ? saved : e))
+    } catch {
+      setExtras(prev => prev.filter(e => e.id !== tempId))
+      setNewExtra(name)
+    }
   }
 
-  async function handleDeleteStaple(id: number) {
-    await deleteStaple(id)
-    setStaples(prev => prev.filter(s => s.id !== id))
+  async function handleDeleteExtra(id: number) {
+    const snapshot = extras
+    setExtras(prev => prev.filter(e => e.id !== id))
+    if (id < 0) return // optimistic item not yet persisted
+    try {
+      await deleteExtra(id)
+    } catch {
+      setExtras(snapshot)
+    }
   }
 
   async function handleStartShopping() {
@@ -212,19 +244,19 @@ export function ListBuilder({ week, onDone }: Props) {
           <>
             <p className="text-xs uppercase tracking-wide text-slate-500">What do you need to pick up?</p>
             {mealsWithIngredients.map((day, i) => (
-              <IngredientField key={day.id} ref={fieldRefs.current[i]} day={day} />
+              <IngredientField key={day.id} ref={fieldRefs.current[i]} day={day} onSaved={onDayUpdated} />
             ))}
           </>
         )}
 
-        {/* Staples */}
+        {/* Extras — non-meal items for this week. Starts blank each week. */}
         <div className="flex flex-col gap-2 mt-2">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Staples &amp; other items</p>
-          {staples.map(s => (
+          <p className="text-xs uppercase tracking-wide text-slate-500">Extras</p>
+          {extras.map(s => (
             <div key={s.id} className="flex items-center gap-3 bg-slate-800 rounded-lg px-3 py-2">
               <span className="flex-1 text-slate-200">{s.name}</span>
               <button
-                onClick={() => handleDeleteStaple(s.id)}
+                onClick={() => handleDeleteExtra(s.id)}
                 className="text-slate-600 hover:text-red-400 text-lg leading-none px-1"
               >×</button>
             </div>
@@ -232,13 +264,13 @@ export function ListBuilder({ week, onDone }: Props) {
           <div className="flex gap-2">
             <input
               className="flex-1 bg-slate-700 text-slate-100 rounded-lg px-3 py-2 text-base outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-500"
-              placeholder="bread, bagels, vanilla syrup..."
-              value={newStaple}
-              onChange={e => setNewStaple(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddStaple()}
+              placeholder="milk, foil, school snacks..."
+              value={newExtra}
+              onChange={e => setNewExtra(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddExtra()}
             />
             <button
-              onClick={handleAddStaple}
+              onClick={handleAddExtra}
               className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg"
             >Add</button>
           </div>

@@ -1,4 +1,4 @@
-import type { WeekDto, DayDto, StapleItem, ShoppingItem } from './types'
+import type { WeekDto, DayDto, ExtraItem, ShoppingItem } from './types'
 
 const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api'
 
@@ -47,18 +47,18 @@ export async function resetShoppingItems(weekId: number): Promise<void> {
   await fetch(`${BASE}/weeks/${weekId}/shopping-items/reset`, { method: 'POST' })
 }
 
-export async function fetchStaples(): Promise<StapleItem[]> {
-  return json(await fetch(`${BASE}/staples`))
+export async function fetchExtras(weekId: number): Promise<ExtraItem[]> {
+  return json(await fetch(`${BASE}/weeks/${weekId}/extras`))
 }
 
-export async function addStaple(name: string): Promise<StapleItem> {
-  return json(await fetch(`${BASE}/staples`, {
+export async function addExtra(weekId: number, name: string): Promise<ExtraItem> {
+  return json(await fetch(`${BASE}/weeks/${weekId}/extras`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   }))
 }
 
-export async function deleteStaple(id: number): Promise<void> {
-  await fetch(`${BASE}/staples/${id}`, { method: 'DELETE' })
+export async function deleteExtra(id: number): Promise<void> {
+  await fetch(`${BASE}/extras/${id}`, { method: 'DELETE' })
 }
