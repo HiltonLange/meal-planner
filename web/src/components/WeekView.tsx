@@ -1,4 +1,4 @@
-import type { WeekDto } from '../types'
+import type { WeekDto, DayDto } from '../types'
 import { DayCard } from './DayCard'
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
   onPrev: () => void
   onNext: () => void
   onToday: () => void
-  onWeekUpdated: (week: WeekDto) => void
+  onDayUpdated: (day: DayDto) => void
 }
 
 function addDays(date: Date, n: number) {
@@ -26,7 +26,7 @@ function formatWeekLabel(startDate: string) {
   return `${start} – ${endStr}`
 }
 
-export function WeekView({ week, isCurrentWeek, onPrev, onNext, onToday, onWeekUpdated }: Props) {
+export function WeekView({ week, isCurrentWeek, onPrev, onNext, onToday, onDayUpdated }: Props) {
   return (
     <div className="flex flex-col">
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-4 py-3 flex items-center justify-between gap-2">
@@ -65,12 +65,7 @@ export function WeekView({ week, isCurrentWeek, onPrev, onNext, onToday, onWeekU
             day={day}
             date={addDays(new Date(week.startDate + 'T00:00:00'), i)}
             optional={day.dayOfWeek === 6}
-            onDayUpdated={updated => {
-              onWeekUpdated({
-                ...week,
-                days: week.days.map(d => d.id === updated.id ? updated : d),
-              })
-            }}
+            onDayUpdated={onDayUpdated}
           />
         ))}
       </div>

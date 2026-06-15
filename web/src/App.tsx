@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { WeekDto } from './types'
+import type { WeekDto, DayDto } from './types'
 import { fetchCurrentWeek, fetchWeekByDate } from './api'
 import { WeekView } from './components/WeekView'
 import { ListBuilder } from './components/ListBuilder'
@@ -37,6 +37,11 @@ export default function App() {
 
   const isCurrentWeek = toIso(currentSunday) === toIso(toSunday(new Date()))
 
+  // Functional update so concurrent day saves (e.g. typing two meals quickly)
+  // don't clobber each other via a stale `week` closure.
+  const updateDay = (day: DayDto) =>
+    setWeek(w => w ? { ...w, days: w.days.map(d => d.id === day.id ? day : d) } : w)
+
   return (
     <div className="flex flex-col min-h-svh bg-slate-900">
       <div className="flex-1 pb-20">
@@ -48,15 +53,13 @@ export default function App() {
             onPrev={() => setCurrentSunday(d => addDays(d, -7))}
             onNext={() => setCurrentSunday(d => addDays(d, 7))}
             onToday={() => setCurrentSunday(toSunday(new Date()))}
-            onWeekUpdated={setWeek}
+            onDayUpdated={updateDay}
           />
         )}
         {phase === 'list' && week && (
           <ListBuilder
             week={week}
-            onDayUpdated={day =>
-              setWeek(w => w ? { ...w, days: w.days.map(d => d.id === day.id ? day : d) } : w)
-            }
+            onDayUpdated={updateDay}
             onDone={() => setPhase('shop')}
           />
         )}
