@@ -1,4 +1,4 @@
-import type { WeekDto, DayDto, ExtraItem, ShoppingItem } from './types'
+import type { WeekDto, DayDto, ExtraItem, ShoppingItem, AisleEntry, AliasEntry, AisleKey } from './types'
 
 const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api'
 
@@ -65,4 +65,30 @@ export async function addExtra(weekId: number, name: string): Promise<ExtraItem>
 
 export async function deleteExtra(id: number): Promise<void> {
   await fetch(`${BASE}/extras/${id}`, { method: 'DELETE' })
+}
+
+// ── Learning maps (family-scoped) ───────────────────────────────────
+
+export async function fetchAisleMap(): Promise<AisleEntry[]> {
+  return json(await fetch(`${BASE}/ingredient-aisles`, GET))
+}
+
+export async function setIngredientAisle(name: string, aisle: AisleKey): Promise<AisleEntry> {
+  return json(await fetch(`${BASE}/ingredient-aisles/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ aisle }),
+  }))
+}
+
+export async function fetchMealAliases(): Promise<AliasEntry[]> {
+  return json(await fetch(`${BASE}/meal-aliases`, GET))
+}
+
+export async function addMealAlias(canonical: string, alias: string): Promise<AliasEntry> {
+  return json(await fetch(`${BASE}/meal-aliases`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ canonical, alias }),
+  }))
 }

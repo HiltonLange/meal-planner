@@ -1,96 +1,31 @@
-import { useState, useEffect } from 'react'
-import type { WeekDto, DayDto } from './types'
-import { fetchCurrentWeek, fetchWeekByDate } from './api'
-import { WeekView } from './components/WeekView'
-import { ListBuilder } from './components/ListBuilder'
-import { ShoppingList } from './components/ShoppingList'
+import { PlannerProvider, usePlanner } from './state'
+import { TabBar } from './components/TabBar'
+import { PlanScreen } from './screens/PlanScreen'
+import { ListScreen } from './screens/ListScreen'
+import { ShopScreen } from './screens/ShopScreen'
+import { C } from './theme'
 import './index.css'
 
-type Phase = 'plan' | 'list' | 'shop'
-
-function toSunday(date: Date) {
-  const d = new Date(date)
-  d.setDate(d.getDate() - d.getDay())
-  return d
-}
-
-function addDays(date: Date, n: number) {
-  const d = new Date(date)
-  d.setDate(d.getDate() + n)
-  return d
-}
-
-function toIso(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
 export default function App() {
-  const [phase, setPhase] = useState<Phase>('plan')
-  const [week, setWeek] = useState<WeekDto | null>(null)
-  const [currentSunday, setCurrentSunday] = useState<Date>(() => toSunday(new Date()))
-
-  useEffect(() => {
-    const isCurrentWeek = toIso(currentSunday) === toIso(toSunday(new Date()))
-    const load = isCurrentWeek ? fetchCurrentWeek() : fetchWeekByDate(toIso(currentSunday))
-    load.then(setWeek)
-  }, [currentSunday])
-
-  const isCurrentWeek = toIso(currentSunday) === toIso(toSunday(new Date()))
-
-  // Functional update so concurrent day saves (e.g. typing two meals quickly)
-  // don't clobber each other via a stale `week` closure.
-  const updateDay = (day: DayDto) =>
-    setWeek(w => w ? { ...w, days: w.days.map(d => d.id === day.id ? day : d) } : w)
-
   return (
-    <div className="flex flex-col min-h-svh bg-slate-900">
-      <div className="flex-1 pb-20">
-        {phase === 'plan' && (
-          <WeekView
-            week={week}
-            currentSunday={currentSunday}
-            isCurrentWeek={isCurrentWeek}
-            onPrev={() => setCurrentSunday(d => addDays(d, -7))}
-            onNext={() => setCurrentSunday(d => addDays(d, 7))}
-            onToday={() => setCurrentSunday(toSunday(new Date()))}
-            onDayUpdated={updateDay}
-          />
-        )}
-        {phase === 'list' && week && (
-          <ListBuilder
-            week={week}
-            onDayUpdated={updateDay}
-            onDone={() => setPhase('shop')}
-          />
-        )}
-        {phase === 'list' && !week && <Loading />}
-        {phase === 'shop' && week && <ShoppingList weekId={week.id} />}
-        {phase === 'shop' && !week && <Loading />}
-      </div>
+    <PlannerProvider>
+      <Shell />
+    </PlannerProvider>
+  )
+}
 
-      {/* Bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-slate-700 flex z-20">
-        <TabButton label="Plan" active={phase === 'plan'} onClick={() => setPhase('plan')} />
-        <TabButton label="List" active={phase === 'list'} onClick={() => setPhase('list')} />
-        <TabButton label="Shop" active={phase === 'shop'} onClick={() => setPhase('shop')} />
-      </nav>
+function Shell() {
+  const { phase } = usePlanner()
+  return (
+    <div className="flex justify-center" style={{ background: C.deviceBg, minHeight: '100svh' }}>
+      <div className="w-full flex flex-col" style={{ maxWidth: 480, height: '100svh', background: C.paper }}>
+        <main className="flex-1 overflow-y-auto">
+          {phase === 'plan' && <PlanScreen />}
+          {phase === 'list' && <ListScreen />}
+          {phase === 'shop' && <ShopScreen />}
+        </main>
+        <TabBar />
+      </div>
     </div>
   )
-}
-
-function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 py-4 text-sm font-medium transition-colors ${
-        active ? 'text-emerald-400 border-t-2 border-emerald-500 -mt-px' : 'text-slate-500 hover:text-slate-300'
-      }`}
-    >
-      {label}
-    </button>
-  )
-}
-
-function Loading() {
-  return <div className="text-center text-slate-500 py-16">Loading…</div>
 }

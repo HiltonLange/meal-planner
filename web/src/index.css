@@ -1,21 +1,65 @@
 @import "tailwindcss";
 
-* {
-  box-sizing: border-box;
+/* ── Design tokens (clay-on-cream) ───────────────────────────────── */
+:root {
+  /* surfaces */
+  --paper: #fcf8f1;       /* app chrome / page bg */
+  --device-bg: #ece5da;
+  --card: #ffffff;
+  --sub: #faf5ec;         /* warm sub-surface */
+  --muted-surface: #f7f2e9;
+
+  /* clay (primary) */
+  --clay: #c1683f;
+  --clay-deep: #a4502c;
+  --clay-tint: #f6e6dd;
+  --clay-banner: #fbf0e9;
+
+  /* herb green (success / fresh) */
+  --herb: #5b9163;
+  --herb-text: #467a4e;
+  --herb-tint: #e7f0e6;
+  --herb-border: #bcd6bf;
+
+  /* text */
+  --ink: #2a2520;
+  --ink-2: #5a5046;
+  --ink-3: #897e71;
+  --muted: #b8ad9e;
+  --muted-2: #c3b8a8;
+  --faint: #a99e8e;
+
+  /* hairlines */
+  --line: #ece3d6;
+  --line-row: #f1eadd;
+  --track: #efe5d6;
+  --dash: #d8cdbd;
+
+  --serif: "Newsreader", Georgia, serif;
+  --sans: "Hanken Grotesque", system-ui, -apple-system, sans-serif;
 }
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
 
 body {
-  margin: 0;
-  background: #0f172a;
-  color: #f1f5f9;
-  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--device-bg);
+  color: var(--ink);
+  font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-#root {
-  min-height: 100svh;
-}
+#root { min-height: 100svh; }
 
-textarea {
-  resize: none;
-}
+textarea { resize: none; }
+
+button { font-family: inherit; }
+
+.serif { font-family: var(--serif); }
+.sans { font-family: var(--sans); }
+
+/* hide scrollbars on horizontal strips while keeping scroll */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

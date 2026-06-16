@@ -13,8 +13,8 @@ export default defineConfig({
         name: 'Meal Planner',
         short_name: 'Meals',
         description: 'Weekly meal planning for the Lange family',
-        theme_color: '#059669',
-        background_color: '#0f172a',
+        theme_color: '#fcf8f1',
+        background_color: '#fcf8f1',
         display: 'standalone',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
