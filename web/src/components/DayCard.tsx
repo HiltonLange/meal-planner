@@ -3,7 +3,7 @@ import type { DayDto } from '../types'
 import { patchDay } from '../api'
 import { usePlanner } from '../state'
 import { C } from '../theme'
-import { clusterForMeal, hasDirectSuggestion, fuzzyCluster, suggestMeals, usualsOf } from '../lib/learning'
+import { clusterForMeal, hasDirectSuggestion, fuzzyCluster, suggestMeals, usualsOf, normalize } from '../lib/learning'
 
 interface Props {
   day: DayDto
@@ -19,6 +19,8 @@ export function DayCard({ day, date, isToday, isSaturday }: Props) {
   const [notesOpen, setNotesOpen] = useState(!!day.notes)
   const [focused, setFocused] = useState(false)
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const [browseOpen, setBrowseOpen] = useState(false)
+  const [browseQuery, setBrowseQuery] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -41,6 +43,12 @@ export function DayCard({ day, date, isToday, isSaturday }: Props) {
   const fuzzy = (!exact && !direct && meal.trim()) ? fuzzyCluster(meal, library) : null
   const showReuse = fuzzy && !dismissed.has(fuzzy.name)
   const suggestions = focused ? suggestMeals(meal, library) : []
+
+  // Browse-all: full history, most-cooked first (library is pre-sorted), filterable.
+  const bq = normalize(browseQuery)
+  const browseList = bq
+    ? library.filter(c => normalize(c.name).includes(bq) || c.aliases.some(a => normalize(a).includes(bq)))
+    : library
 
   function pickSuggestion(name: string) {
     if (blurTimer.current) clearTimeout(blurTimer.current)
@@ -89,6 +97,17 @@ export function DayCard({ day, date, isToday, isSaturday }: Props) {
               <button onMouseDown={e => e.preventDefault()} onClick={() => changeMeal('')}
                 style={{ color: C.muted }} className="text-lg leading-none px-1">×</button>
             )}
+            <button
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { setBrowseQuery(''); setBrowseOpen(true) }}
+              aria-label="Browse past meals"
+              className="flex items-center justify-center shrink-0"
+              style={{ width: 30, height: 30, borderRadius: 999, color: C.ink3 }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 2.5-6.2L3 8" /><path d="M3 4v4h4" /><path d="M12 8v4l3 2" />
+              </svg>
+            </button>
           </div>
 
           {/* linked confirmation */}
@@ -163,6 +182,54 @@ export function DayCard({ day, date, isToday, isSaturday }: Props) {
           )}
         </div>
       </div>
+
+      {/* Browse all past meals (most cooked first) */}
+      {browseOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end" style={{ background: 'rgba(40,28,18,0.35)' }} onClick={() => setBrowseOpen(false)}>
+          <div
+            onClick={e => e.stopPropagation()}
+            className="mx-auto w-full flex flex-col"
+            style={{ maxWidth: 480, maxHeight: '74vh', background: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, boxShadow: '0 -16px 40px rgba(40,28,18,0.25)' }}
+          >
+            <div style={{ padding: '16px 18px 8px' }}>
+              <div className="flex items-center justify-between">
+                <h3 className="serif" style={{ fontSize: 21, color: C.ink }}>All meals</h3>
+                <button onClick={() => setBrowseOpen(false)} aria-label="Close" style={{ color: C.ink3, fontSize: 24, lineHeight: 1, padding: '0 4px' }}>×</button>
+              </div>
+              <p style={{ fontSize: 11.5, color: C.ink3, marginTop: 1 }}>Most cooked first · tap to plan it for {day.dayName}</p>
+              <input
+                autoFocus
+                value={browseQuery}
+                onChange={e => setBrowseQuery(e.target.value)}
+                placeholder="Search meals…"
+                className="w-full mt-2.5 outline-none"
+                style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 14.5, color: C.ink, padding: '9px 13px' }}
+              />
+            </div>
+            <div className="overflow-y-auto" style={{ padding: '4px 10px 22px' }}>
+              {browseList.length === 0 ? (
+                <p className="text-center py-12" style={{ color: C.muted, fontSize: 14 }}>
+                  {library.length === 0 ? "No past meals yet — plan a few weeks and they'll collect here." : 'No matches.'}
+                </p>
+              ) : browseList.map((c, i) => (
+                <button
+                  key={c.name}
+                  onClick={() => { changeMeal(c.name); setBrowseOpen(false) }}
+                  className="w-full flex items-center justify-between text-left gap-3"
+                  style={{ padding: '12px', borderRadius: 12, borderTop: i > 0 ? `1px solid ${C.lineRow}` : 'none' }}
+                >
+                  <span className="serif truncate" style={{ fontSize: 17, color: C.ink }}>
+                    {c.fav && <span style={{ color: C.clay, marginRight: 6 }}>★</span>}{c.name}
+                  </span>
+                  <span className="shrink-0" style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
+                    {c.cooks}× · {c.lastAgo}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
