@@ -282,6 +282,50 @@ app.MapDelete("/api/extras/{id:int}", async (int id, AppDbContext db) =>
     return Results.NoContent();
 });
 
+// --- Learned ingredient -> aisle map (family-scoped; the Shop "learning") ---
+
+app.MapGet("/api/ingredient-aisles", async (AppDbContext db) =>
+    Results.Ok(await db.IngredientAisles
+        .Select(i => new AisleEntry(i.Name, i.Aisle))
+        .ToListAsync()));
+
+// Upsert one correction. Applies to every shopping item with this name on the
+// client. Name is normalized so client and server agree on the key.
+app.MapPut("/api/ingredient-aisles/{name}", async (string name, AisleRequest req, AppDbContext db) =>
+{
+    var key = Normalize(name);
+    if (string.IsNullOrEmpty(key) || string.IsNullOrWhiteSpace(req.Aisle))
+        return Results.BadRequest("name and aisle required");
+    var existing = await db.IngredientAisles.FirstOrDefaultAsync(i => i.Name == key);
+    if (existing is null)
+        db.IngredientAisles.Add(new IngredientAisle { Name = key, Aisle = req.Aisle });
+    else
+        existing.Aisle = req.Aisle;
+    await db.SaveChangesAsync();
+    return Results.Ok(new AisleEntry(key, req.Aisle));
+});
+
+// --- Learned meal aliases (synonym overlay; NOT a meal entity) ---
+
+app.MapGet("/api/meal-aliases", async (AppDbContext db) =>
+    Results.Ok(await db.MealAliases
+        .Select(a => new AliasEntry(a.Alias, a.Canonical))
+        .ToListAsync()));
+
+app.MapPost("/api/meal-aliases", async (MealAliasRequest req, AppDbContext db) =>
+{
+    var alias = Normalize(req.Alias);
+    if (string.IsNullOrEmpty(alias) || string.IsNullOrWhiteSpace(req.Canonical))
+        return Results.BadRequest("alias and canonical required");
+    var existing = await db.MealAliases.FirstOrDefaultAsync(a => a.Alias == alias);
+    if (existing is null)
+        db.MealAliases.Add(new MealAlias { Alias = alias, Canonical = req.Canonical });
+    else
+        existing.Canonical = req.Canonical;
+    await db.SaveChangesAsync();
+    return Results.Ok(new AliasEntry(alias, req.Canonical));
+});
+
 app.Run();
 
 // --- Helpers ---
@@ -293,14 +337,25 @@ static DateOnly ToSunday(DateOnly date) => date.AddDays(-(int)date.DayOfWeek);
 static async Task<Week> GetOrCreateWeek(AppDbContext db, DateOnly sunday)
 {
     var week = await db.Weeks.Include(w => w.Days).FirstOrDefaultAsync(w => w.StartDate == sunday);
-    if (week is null)
+    if (week is not null) return week;
+
+    week = new Week
     {
-        week = new Week { StartDate = sunday };
-        week.Days = Enumerable.Range(0, 7).Select(i => new DayPlan { DayOfWeek = i }).ToList();
-        db.Weeks.Add(week);
+        StartDate = sunday,
+        Days = Enumerable.Range(0, 7).Select(i => new DayPlan { DayOfWeek = i }).ToList(),
+    };
+    db.Weeks.Add(week);
+    try
+    {
         await db.SaveChangesAsync();
+        return week;
     }
-    return week;
+    catch (DbUpdateException)
+    {
+        // Lost a race with a concurrent create (unique StartDate) — reload the winner.
+        db.ChangeTracker.Clear();
+        return await db.Weeks.Include(w => w.Days).FirstAsync(w => w.StartDate == sunday);
+    }
 }
 
 static WeekDto ToDto(Week week) => new(
@@ -322,12 +377,40 @@ static IEnumerable<string> ParseIngredients(string text) =>
     text.Split(['\n', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .Where(s => !string.IsNullOrWhiteSpace(s));
 
+// Mirrors the client's normalize(): lowercase, strip to [a-z0-9 ], collapse
+// whitespace. A no-op on already-normalized input, so client/server keys agree.
+static string Normalize(string? s)
+{
+    if (string.IsNullOrWhiteSpace(s)) return "";
+    var sb = new System.Text.StringBuilder(s.Length);
+    var prevSpace = false;
+    foreach (var ch in s.Trim().ToLowerInvariant())
+    {
+        if (ch is (>= 'a' and <= 'z') or (>= '0' and <= '9'))
+        {
+            sb.Append(ch);
+            prevSpace = false;
+        }
+        else if (char.IsWhiteSpace(ch))
+        {
+            if (!prevSpace && sb.Length > 0) sb.Append(' ');
+            prevSpace = true;
+        }
+        // any other char is dropped
+    }
+    return sb.ToString().TrimEnd();
+}
+
 // --- DTOs ---
 
 record WeekDto(int Id, DateOnly StartDate, List<DayDto> Days);
 record DayDto(int Id, int DayOfWeek, string DayName, string Meal, string Notes, string Ingredients);
 record DayPatchRequest(string? Meal, string? Notes, string? Ingredients);
 record ExtraRequest(string Name);
+record AisleEntry(string Name, string Aisle);
+record AisleRequest(string Aisle);
+record AliasEntry(string Alias, string Canonical);
+record MealAliasRequest(string Alias, string Canonical);
 
 // Allow WebApplicationFactory to reference the entry point
 public partial class Program { }
