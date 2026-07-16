@@ -13,7 +13,7 @@ az account set --subscription 4d5f5be2-3e19-45b2-99d3-cddcdb3b2e37
 | Component | Resource | RG | URL |
 |---|---|---|---|
 | Frontend (PWA) | Static Web App `green-pebble-0bad19b10` | (SWA-managed) | https://green-pebble-0bad19b10.1.azurestaticapps.net |
-| API (.NET 9) | App Service `hilton-meal-planner-api` (Linux, DOTNETCORE\|9.0) | `meal-planner-rg` | https://hilton-meal-planner-api.azurewebsites.net |
+| API (.NET 9) | App Service `hilton-meal-planner-api` (**Windows**, dotnet:9) | `meal-planner-rg` | https://hilton-meal-planner-api.azurewebsites.net |
 | Data | SQLite file on App Service **persistent** storage (`/home/data/mealplanner.db`) | `meal-planner-rg` | — |
 
 ### Storage / persistence (verified 2026-06-14)
@@ -39,8 +39,18 @@ Two consequences worth remembering:
   copy of `mealplanner.db` to Blob storage is the obvious next step
   (not yet done).
 
-App Service Plan: **B1 Basic**, 1 instance. `httpsOnly` is off and
-Always On is off (cold starts after idle — Kudu/SCM can be slow to wake).
+App Service Plan: **F1 Free** (`meal-planner-free-plan`, Windows), 1
+instance. Moved off the paid B1 Basic (~$13/mo) on 2026-07-16 to the free
+tier. `httpsOnly` is off. **Always On is unavailable on F1** — the app
+cold-starts after ~20 min idle (Kudu/SCM can be slow to wake). F1 also
+caps CPU at 60 min/day and storage at 1 GB, which is comfortably within
+this app's usage.
+
+> Note: Azure App Service on **Linux** has no free tier (B1 is the floor),
+> which is why the free-tier move required switching the app to a
+> **Windows** plan. The app can't change OS in place, so it was deleted
+> and recreated under the same name (hostname preserved); the SQLite DB
+> was backed up from `/home/data` and restored onto the new instance.
 
 ## Frontend deploy
 
@@ -59,7 +69,7 @@ runs the tests, then publishes and deploys to App Service using the
 so a schema change ships by merging to `master` — no manual step.
 
 Watch a run: `gh run list --workflow=api-ci.yml` /
-`gh run watch <id>`. Note the API is **B1 with Always On off**, so after
+`gh run watch <id>`. Note the API is **F1 Free (no Always On)**, so after
 deploy the first request cold-starts (Kudu/SCM can be slow to wake).
 
 ### Manual deploy (fallback only — normally unnecessary)
