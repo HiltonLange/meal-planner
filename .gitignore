@@ -16,6 +16,10 @@ web/dist/
 # Azure CLI (sandboxed via AZURE_CONFIG_DIR)
 .azure/
 
+# Secrets / local credentials (never commit)
+_pat.txt
+*.pat
+
 # Editor
 .vs/
 .vscode/
